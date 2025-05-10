@@ -10,9 +10,6 @@ using System.Windows.Media;
 
 namespace CashMachine.WPF
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
         private CashMachine.Core.CashMachine _cashMachine;

@@ -4,14 +4,12 @@ using System.Linq;
 
 namespace CashMachine.Core
 {
-    // Represents a banknote cassette in the ATM
     public class BanknoteCassette
     {
-        // Denomination of the banknote
         public int Denomination { get; }
-        // Maximum number of banknotes the cassette can hold
+
         public int Capacity { get; }
-        // Current number of banknotes in the cassette
+
         public int Count { get; private set; }
 
         public BanknoteCassette(int denomination, int capacity)
@@ -21,28 +19,30 @@ namespace CashMachine.Core
             Count = 0;
         }
 
-        // Add banknotes to the cassette
         public int Add(int count)
         {
             int space = Capacity - Count;
-            int toAdd = Math.Min(space, count);
-            Count += toAdd;
-            return toAdd;
+            if (count > space)
+            {
+                throw new InvalidOperationException($"Cannot add {count} banknotes: only {space} slots available in cassette for denomination {Denomination}.");
+            }
+            Count += count;
+            return count;
         }
 
-        // Remove banknotes from the cassette
         public int Remove(int count)
         {
-            int toRemove = Math.Min(Count, count);
-            Count -= toRemove;
-            return toRemove;
+            if (count > Count)
+            {
+                throw new InvalidOperationException($"Cannot remove {count} banknotes: only {Count} available in cassette for denomination {Denomination}.");
+            }
+            Count -= count;
+            return count;
         }
     }
 
-    // Represents the ATM (Cash Machine)
     public class CashMachine
     {
-        // Dictionary of denomination to cassette
         private readonly Dictionary<int, BanknoteCassette> _cassettes;
 
         public CashMachine(Dictionary<int, int> denominationCapacities)
@@ -54,12 +54,11 @@ namespace CashMachine.Core
             }
         }
 
-        // Deposit banknotes into the ATM
         public void Deposit(int denomination, int count)
         {
             if (!_cassettes.ContainsKey(denomination))
             {
-                throw new ArgumentException($"ATM does not support denomination {denomination}");
+                throw new ArgumentException($"Cache machine does not support denomination {denomination}");
             }
             int added = _cassettes[denomination].Add(count);
             if (added < count)
@@ -68,7 +67,6 @@ namespace CashMachine.Core
             }
         }
 
-        // Withdraw banknotes of a specific denomination
         public int Withdraw(int denomination, int count)
         {
             if (!_cassettes.ContainsKey(denomination))
@@ -83,19 +81,16 @@ namespace CashMachine.Core
             return removed;
         }
 
-        // Get the current balance of the ATM
         public int GetBalance()
         {
             return _cassettes.Values.Sum(c => c.Denomination * c.Count);
         }
 
-        // Get the state of the ATM (denominations and their counts)
         public Dictionary<int, int> GetState()
         {
             return _cassettes.ToDictionary(c => c.Key, c => c.Value.Count);
         }
 
-        // Get available denominations
         public List<int> GetAvailableDenominations()
         {
             return _cassettes.Keys.OrderBy(x => x).ToList();
@@ -106,7 +101,6 @@ namespace CashMachine.Core
         // Returns a dictionary of denomination to count dispensed
         public Dictionary<int, int> WithdrawAmount(int amount, Func<List<int>, Dictionary<int, int>>? selector = null)
         {
-            // Get available denominations (sorted descending)
             var denominations = _cassettes.Keys.OrderByDescending(x => x).ToList();
             Dictionary<int, int> toDispense;
 
@@ -137,16 +131,6 @@ namespace CashMachine.Core
                 }
             }
 
-            // Check if we have enough notes in cassettes
-            foreach (var pair in toDispense)
-            {
-                if (!_cassettes.ContainsKey(pair.Key) || _cassettes[pair.Key].Count < pair.Value)
-                {
-                    throw new InvalidOperationException($"Not enough banknotes of denomination {pair.Key}");
-                }
-            }
-
-            // Dispense the notes
             foreach (var pair in toDispense)
             {
                 _cassettes[pair.Key].Remove(pair.Value);
