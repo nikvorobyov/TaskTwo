@@ -58,20 +58,28 @@ namespace CashMachine.Core
         public void Deposit(int denomination, int count)
         {
             if (!_cassettes.ContainsKey(denomination))
+            {
                 throw new ArgumentException($"ATM does not support denomination {denomination}");
+            }
             int added = _cassettes[denomination].Add(count);
             if (added < count)
+            {
                 throw new InvalidOperationException($"Only {added} banknotes of {denomination} were accepted due to cassette limit.");
+            }
         }
 
         // Withdraw banknotes of a specific denomination
         public int Withdraw(int denomination, int count)
         {
             if (!_cassettes.ContainsKey(denomination))
+            {
                 throw new ArgumentException($"ATM does not support denomination {denomination}");
+            }
             int removed = _cassettes[denomination].Remove(count);
             if (removed < count)
+            {
                 throw new InvalidOperationException($"Only {removed} banknotes of {denomination} available.");
+            }
             return removed;
         }
 
@@ -92,5 +100,59 @@ namespace CashMachine.Core
         {
             return _cassettes.Keys.OrderBy(x => x).ToList();
         }
+
+        // Withdraw a specific amount using available denominations
+        // selector: optional function to choose how to split the amount by denominations
+        // Returns a dictionary of denomination to count dispensed
+        public Dictionary<int, int> WithdrawAmount(int amount, Func<List<int>, Dictionary<int, int>>? selector = null)
+        {
+            // Get available denominations (sorted descending)
+            var denominations = _cassettes.Keys.OrderByDescending(x => x).ToList();
+            Dictionary<int, int> toDispense;
+
+            if (selector != null)
+            {
+                // Use custom selector to determine how to split the amount
+                toDispense = selector(denominations);
+            }
+            else
+            {
+                // Default: use largest denominations first
+                toDispense = new Dictionary<int, int>();
+                int remaining = amount;
+                foreach (var denom in denominations)
+                {
+                    int availableNotes = _cassettes[denom].Count;
+                    int neededNotes = remaining / denom;
+                    int notesToUse = Math.Min(neededNotes, availableNotes);
+                    if (notesToUse > 0)
+                    {
+                        toDispense[denom] = notesToUse;
+                        remaining -= notesToUse * denom;
+                    }
+                }
+                if (remaining != 0)
+                {
+                    throw new InvalidOperationException($"Cannot dispense the requested amount: {amount}");
+                }
+            }
+
+            // Check if we have enough notes in cassettes
+            foreach (var pair in toDispense)
+            {
+                if (!_cassettes.ContainsKey(pair.Key) || _cassettes[pair.Key].Count < pair.Value)
+                {
+                    throw new InvalidOperationException($"Not enough banknotes of denomination {pair.Key}");
+                }
+            }
+
+            // Dispense the notes
+            foreach (var pair in toDispense)
+            {
+                _cassettes[pair.Key].Remove(pair.Value);
+            }
+
+            return toDispense;
+        }
     }
-} 
+}
