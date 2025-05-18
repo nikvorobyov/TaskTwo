@@ -10,13 +10,15 @@ using System.Windows.Media;
 
 namespace CashMachine.WPF
 {
+    using Banknote = CashMachine.Core.Banknote;
     public partial class MainWindow : Window
     {
         private CashMachine.Core.CashMachine _cashMachine;
-        private readonly int[] _denominations = { 10, 50, 100, 200, 500, 1000, 5000 };
         private const int InitialCount = 100; // Large number of banknotes for each denomination
         private const int CassetteCapacity = 200; // Example cassette capacity
-        private readonly Dictionary<int, CheckBox> _checkboxes = new();
+        Banknote[] _denominations = (Banknote[])Enum.GetValues(typeof(Banknote));
+        private readonly Dictionary<Banknote, CheckBox> _checkboxes = new();
+
 
         public MainWindow()
         {
@@ -114,22 +116,22 @@ namespace CashMachine.WPF
             // Determine selected denominations
             var selectedDenoms = _denominations.Where(d => _checkboxes[d].IsChecked == true).ToList();
             selectedDenoms.Reverse();
-            Func<List<int>, Dictionary<int, int>>? selector = null;
+            Func<List<Banknote>, Dictionary<Banknote, int>>? selector = null;
             if (selectedDenoms.Count > 0)
             {
                 selector = (availableDenoms) =>
                 {
-                    var result = new Dictionary<int, int>();
+                    var result = new Dictionary<Banknote, int>();
                     int remaining = amount;
                     foreach (var denom in selectedDenoms)
                     {
                         int availableNotes = _cashMachine.GetState()[denom];
-                        int neededNotes = remaining / denom;
+                        int neededNotes = remaining / (int)denom;
                         int notesToUse = Math.Min(neededNotes, availableNotes);
                         if (notesToUse > 0)
                         {
                             result[denom] = notesToUse;
-                            remaining -= notesToUse * denom;
+                            remaining -= notesToUse * (int)denom;
                         }
                     }
                     if (remaining != 0)
@@ -139,9 +141,23 @@ namespace CashMachine.WPF
             }
             try
             {
-                var result = _cashMachine.WithdrawAmount(amount, selector);
-                string dispensed = string.Join(", ", result.Select(kv => $"{kv.Key} x {kv.Value}"));
-                MessageBox.Show($"Dispensed: {dispensed}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                var stateBefore = _cashMachine.GetState();
+
+                _cashMachine.WithdrawAmount(amount, selector);
+
+                var stateAfter = _cashMachine.GetState();
+
+                var dispensed = stateBefore
+                    .Where(kv => stateAfter.ContainsKey(kv.Key))
+                    .Select(kv => new { Denom = kv.Key, Count = kv.Value - stateAfter[kv.Key] })
+                    .Where(x => x.Count > 0)
+                    .ToList();
+
+                string dispensedStr = dispensed.Count > 0
+                    ? string.Join(", ", dispensed.Select(x => $"{x.Denom} x {x.Count}"))
+                    : "Nothing dispensed";
+
+                MessageBox.Show($"Dispensed: {dispensedStr}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
